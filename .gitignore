@@ -1,0 +1,26 @@
+# 데이터와 렌더링 결과는 레포에 올리지 않는다 (라이선스/용량 문제)
+data/
+rendered/
+out/
+*.wav
+*.flac
+*.zip
+
+# 학습 산출물
+checkpoints/
+runs/
+wandb/
+*.pt
+*.ckpt
+
+# Python
+__pycache__/
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# 노트북
+.ipynb_checkpoints/
+
+.DS_Store

@@ -1,0 +1,31 @@
+# 랜덤 이펙트 체인 설정.
+# 각 노브는 [0, 1]로 정규화해서 샘플링하고, 아래 [min, max] 범위로 선형 변환한다.
+# 학습 때는 정규화된 값(0~1)을 조건으로 쓰면 이펙트 종류가 달라도 같은 스케일로 다룰 수 있다.
+
+sample_rate: 44100
+clip_seconds: 4.0
+hop_seconds: 4.0          # clip_seconds와 같으면 겹침 없음
+min_rms_db: -50.0         # 이보다 조용한 클립은 건너뜀
+dry_peak_db: -6.0         # dry 클립을 이 피크로 정규화 (입력 레벨을 고정해서 드라이브 반응을 일정하게)
+
+# 체인 순서는 코드에 고정: comp -> drive -> tone -> reverb
+effects:
+  comp:
+    p_enable: 0.5
+    knobs:
+      threshold_db: [-35.0, -8.0]
+      ratio: [1.5, 8.0]
+  drive:
+    p_enable: 0.8
+    knobs:
+      gain_db: [0.0, 40.0]
+      level_db: [-12.0, 0.0]
+  tone:
+    p_enable: 0.7
+    knobs:
+      tilt_db: [-9.0, 9.0]       # 양수면 고역 강조, 음수면 저역 강조
+  reverb:
+    p_enable: 0.4
+    knobs:
+      room_size: [0.1, 0.9]
+      wet_level: [0.05, 0.4]
