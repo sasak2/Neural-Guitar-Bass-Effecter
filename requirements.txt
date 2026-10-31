@@ -5,3 +5,4 @@ pedalboard
 pyyaml
 tqdm
 pytest
+torch

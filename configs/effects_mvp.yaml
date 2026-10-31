@@ -1,0 +1,32 @@
+# MVP 학습용 설정: 리버브를 끈 체인 (comp, drive, tone).
+# 이유: 현재 모델(TCN)의 수용 영역은 약 0.2초라서 리버브 꼬리처럼 긴 시간 효과는 학습하기 어렵다.
+# 리버브는 모델 구조를 바꾼 뒤 effects.yaml로 다시 켠다.
+#
+# 주의: 원본 Guitar-TECHS DI가 48kHz라서 sample_rate도 48000으로 맞췄다.
+
+sample_rate: 48000
+clip_seconds: 4.0
+hop_seconds: 4.0
+min_rms_db: -50.0
+dry_peak_db: -6.0
+
+effects:
+  comp:
+    p_enable: 0.5
+    knobs:
+      threshold_db: [-35.0, -8.0]
+      ratio: [1.5, 8.0]
+  drive:
+    p_enable: 0.8
+    knobs:
+      gain_db: [0.0, 40.0]
+      level_db: [-12.0, 0.0]
+  tone:
+    p_enable: 0.7
+    knobs:
+      tilt_db: [-9.0, 9.0]
+  reverb:
+    p_enable: 0.0          # 항상 꺼짐 (조건 벡터의 차원은 유지됨)
+    knobs:
+      room_size: [0.1, 0.9]
+      wet_level: [0.05, 0.4]

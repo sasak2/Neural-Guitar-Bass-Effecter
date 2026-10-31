@@ -131,6 +131,14 @@ def render_dataset(
     max_files: int | None = None,
 ) -> int:
     dry_dir, out_dir = Path(dry_dir), Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    # 다시 렌더링해도 메타가 중복으로 쌓이지 않게 비운다 (같은 seed면 결과도 같다)
+    for old_meta in out_dir.glob("*/meta.jsonl"):
+        old_meta.unlink()
+    # 학습/추론이 같은 설정(샘플레이트, 노브 범위)을 쓰도록 렌더링 설정을 함께 저장
+    (out_dir / "render_config.json").write_text(
+        json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     files = sorted(p for p in dry_dir.rglob("*") if p.suffix.lower() in AUDIO_EXTS)
     if max_files is not None:
         files = files[:max_files]
