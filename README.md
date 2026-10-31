@@ -23,7 +23,7 @@ dry 기타 DI 녹음을 공개 데이터셋에서 받아서 `pedalboard`로 랜�
 
 1. `notebooks/01_train_oneclick.ipynb`를 Colab에서 연다.
 2. 런타임을 GPU(T4)로 바꾼다.
-3. 처음 한 번만: 레포 읽기 권한이 있는 GitHub 토큰을 Colab Secrets에 `GH_TOKEN`으로 저장한다 (레포가 private이라서).
+3. (레포가 private일 때만) 읽기 권한이 있는 GitHub 토큰을 Colab Secrets에 `GH_TOKEN`으로 저장한다.
 4. "모두 실행"을 누른다. 데이터 다운로드, 렌더링, 학습, 샘플 듣기까지 이어서 진행된다.
 
 체크포인트는 Google Drive(`MyDrive/neural-guitar-bass-effecter/runs/<RUN_NAME>`)에 저장된다. 세션이 끊기거나 시간 제한(`MAX_MINUTES`)에 걸려도 같은 이름으로 다시 실행하면 이어서 학습한다. 흐름만 먼저 점검하고 싶으면 노트북 설정에서 `SMOKE_TEST = True`로 둔다.
