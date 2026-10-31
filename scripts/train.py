@@ -38,6 +38,8 @@ def main() -> None:
     ap.add_argument("--log-every", type=int, default=100)
     ap.add_argument("--time-weight", type=float, default=0.5)
     ap.add_argument("--no-resume", dest="resume", action="store_false")
+    ap.add_argument("--final-items", type=int, default=None,
+                    help="마지막 val/test 평가에 쓸 쌍 수 (기본: 전부, 클립 전체 길이)")
     args = vars(ap.parse_args())
     train(**args)
 

@@ -59,6 +59,20 @@ def evaluate(model, ds, crit, dev, time_weight, identity=False, batch_size=8) ->
 
 
 @torch.no_grad()
+def per_item_losses(model, ds, crit, dev, time_weight) -> list[tuple[float, float]]:
+    """(모델 손실, identity 손실) 를 쌍마다 하나씩. 어떤 클립에서 크게 틀리는지 볼 때 쓴다."""
+    model.eval()
+    out = []
+    for i in range(len(ds)):
+        dry, wet, cond = (t[None].to(dev) for t in ds[i])
+        out.append((
+            float(total_loss(crit, model(dry, cond), wet, time_weight)),
+            float(total_loss(crit, dry, wet, time_weight)),
+        ))
+    return out
+
+
+@torch.no_grad()
 def write_samples(model, ds, dev, out_dir: Path, step: int, sr: int) -> None:
     d = out_dir / "samples" / f"step{step:06d}"
     d.mkdir(parents=True, exist_ok=True)
@@ -91,6 +105,7 @@ def train(
     log_every: int = 100,
     time_weight: float = 0.5,
     resume: bool = True,
+    final_items: int | None = None,
 ) -> dict[str, Any]:
     data_dir, out_dir = Path(data_dir), Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -209,13 +224,21 @@ def train(
 
     ck = torch.load(best_path, map_location=dev, weights_only=False)
     model.load_state_dict(ck["model"])
+    # 최종 지표: 학습 중 쓰던 일부 샘플/잘라낸 구간이 아니라 전체 val/test를 클립 전체 길이로 평가한다
+    clip_len = int(cfg["clip_seconds"] * sr)
+    full_val = _pick(data_dir, cfg, "val", clip_len, final_items)
+    full_test = _pick(data_dir, cfg, "test", clip_len, final_items)
+    eb = 4
     metrics = {
         "steps": step,
         "finished": (not stopped_early) and step >= steps,
-        "best_val": best_val,
-        "val_identity": evaluate(model, val_ds, crit, dev, time_weight, identity=True),
-        "test_model": evaluate(model, test_ds, crit, dev, time_weight),
-        "test_identity": evaluate(model, test_ds, crit, dev, time_weight, identity=True),
+        "best_val": best_val,  # 학습 중 기준(일부 val, 잘라낸 구간)
+        "val_full_model": evaluate(model, full_val, crit, dev, time_weight, batch_size=eb),
+        "val_full_identity": evaluate(model, full_val, crit, dev, time_weight, identity=True, batch_size=eb),
+        "val_pairs": len(full_val),
+        "test_model": evaluate(model, full_test, crit, dev, time_weight, batch_size=eb),
+        "test_identity": evaluate(model, full_test, crit, dev, time_weight, identity=True, batch_size=eb),
+        "test_pairs": len(full_test),
         "receptive_field_samples": model.receptive_field(),
     }
     (out_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
