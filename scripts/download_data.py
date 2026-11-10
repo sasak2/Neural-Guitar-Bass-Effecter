@@ -6,11 +6,14 @@
 guitar_techs: Zenodo record 14963133 (CC BY 4.0)의 압축 파일에서 direct input(DI) wav만 꺼낸다.
               압축 안의 구조는 `<아카이브>/audio/directinput/*.wav` (48kHz 24bit, 좌우 동일한 모노).
 egfxset_clean: Zenodo record 7044411 (CC BY 4.0)의 Clean.zip (431MB).
+vocalset: Zenodo record 1442513 (CC BY 4.0)의 VocalSet11.zip (2.1GB). 가수 20명의 단선율 노래 약 10시간.
+          압축 안의 구조는 `FULL/<가수>/<맥락>/<기법>/*.wav` (44.1kHz 모노). `<가수>__<파일>.wav`로 풀어 쓴다.
 """
 
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import time
 import urllib.request
@@ -24,6 +27,7 @@ GT_ALL_PARTS = GT_DEFAULT_PARTS + [
     "P1_chords", "P2_chords", "P1_singlenotes", "P2_singlenotes",
 ]
 EGFXSET_CLEAN_URL = "https://zenodo.org/record/7044411/files/Clean.zip?download=1"
+VOCALSET_URL = "https://zenodo.org/records/1442513/files/VocalSet11.zip?download=1"
 
 
 def download(url: str, dest: Path, retries: int = 3) -> None:
@@ -120,9 +124,48 @@ def get_egfxset_clean(dest: Path) -> None:
     print(f"완료 -> {out_dir} ({len(list(out_dir.glob('*.wav')))}개)")
 
 
+def vocalset_member(name: str) -> tuple[str, str] | None:
+    """zip 항목이 가수 폴더 아래의 wav면 (가수, 파일이름)을 돌려준다."""
+    parts = [p for p in name.replace("\\", "/").split("/") if p]
+    if not parts or parts[0] == "__MACOSX" or parts[-1].startswith("._"):
+        return None
+    if not parts[-1].lower().endswith(".wav"):
+        return None
+    for p in parts[:-1]:
+        if re.fullmatch(r"(female|male)\d+", p):
+            return p, parts[-1]
+    return None
+
+
+def get_vocalset(dest: Path, keep_zips: bool) -> None:
+    out_dir = dest / "vocalset"
+    if len(list(out_dir.glob("*.wav"))) > 3000:
+        print(f"이미 있음, 건너뜀 -> {out_dir}")
+        return
+    zip_path = dest / "_zips" / "VocalSet11.zip"
+    if not zip_path.exists():
+        download(VOCALSET_URL, zip_path)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    n = 0
+    with zipfile.ZipFile(zip_path) as z:
+        for m in z.namelist():
+            hit = vocalset_member(m)
+            if hit is None:
+                continue
+            # 가수 접두어가 없는 파일 이름도 있어서(예: male10/.../scales_c_fast_piano_e.wav) 폴더 이름을 붙인다
+            with z.open(m) as src, open(out_dir / f"{hit[0]}__{hit[1]}", "wb") as dst:
+                shutil.copyfileobj(src, dst)
+            n += 1
+    if n == 0:
+        raise SystemExit("VocalSet에서 wav를 하나도 찾지 못했다. 압축 구조가 바뀌었는지 확인할 것.")
+    if not keep_zips:
+        zip_path.unlink(missing_ok=True)
+    print(f"완료: {n}개 파일 -> {out_dir}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    ap.add_argument("dataset", choices=["guitar_techs", "egfxset_clean"])
+    ap.add_argument("dataset", choices=["guitar_techs", "egfxset_clean", "vocalset"])
     ap.add_argument("--dest", type=Path, default=Path("data"))
     ap.add_argument(
         "--parts", nargs="+", default=GT_DEFAULT_PARTS, choices=GT_ALL_PARTS,
@@ -133,6 +176,8 @@ def main() -> None:
 
     if args.dataset == "guitar_techs":
         get_guitar_techs(args.dest, args.parts, args.keep_zips)
+    elif args.dataset == "vocalset":
+        get_vocalset(args.dest, args.keep_zips)
     else:
         get_egfxset_clean(args.dest)
 

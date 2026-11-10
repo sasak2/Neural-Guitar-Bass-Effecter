@@ -7,3 +7,5 @@ tqdm
 pytest
 torch
 librosa
+torchcrepe
+huggingface_hub

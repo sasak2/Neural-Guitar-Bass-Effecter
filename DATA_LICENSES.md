@@ -21,6 +21,16 @@
 | IDMT-SMT-Audio-Effects | 기타/베이스 단음, 효과 포함 | CC BY-NC-ND 4.0 | **제외** (ND) |
 | IDMT-SMT-Bass | 베이스 단음 약 3.6시간 | 확인 못 함 | 보류 (베이스는 나중에) |
 
+## 생성형 모델용 (2026-11-10 확인)
+
+| 대상 | 내용 | 라이선스 | 상태 |
+|---|---|---|---|
+| VocalSet 1.1/1.2 | 가수 20명의 단선율 노래 10.1시간, 44.1 kHz 모노 (Zenodo 1442513) | CC BY 4.0 (Zenodo 레코드의 License 항목) | **사용** (`VocalSet11.zip`) |
+| BigVGAN v2 `bigvgan_v2_44khz_128band_512x` | 사전학습 보코더 (코드와 가중치) | MIT (Hugging Face 모델 카드, GitHub LICENSE) | **사용** (추론만, 레포에 포함하지 않고 실행 시 내려받음) |
+| torchcrepe | 음높이 추정 (가중치 포함 pip 패키지) | MIT (저장소 표기, 직접 재확인 필요) | **사용** |
+
+VocalSet 인용: Wilkins, Seetharaman, Wahl, Pardo, "VocalSet: A Singing Voice Dataset", ISMIR 2018.
+
 ## 나중에 확인할 것
 
 - GOAT, EGDB의 데이터 라이선스

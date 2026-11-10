@@ -9,7 +9,7 @@
 | 1 | 노브 값을 조건으로 받는 이펙터: `dry + 노브 -> wet` (합성 데이터) | 파이프라인 검증 완료 |
 | 2 | 데이터 강화: 센 디스토션/퍼즈, 입력 레벨/잡음/픽업 EQ 증강, 속주 변환 | 계획 |
 | 3 | 참조음 임베딩 조건: 노브 자리에 참조음 인코더 출력. 가까운 목표(같은 악기군의 음색 교환, 예: 프레시전에서 재즈 베이스 톤)부터 | 계획 |
-| 4 | 먼 목표(목소리 등 완전히 다른 소리): 연주 특징(음높이/세기/어택)을 입력으로 받는 생성형 | 프로토타입(특징 추출, 합성 정답) |
+| 4 | 먼 목표(목소리 등 완전히 다른 소리): 연주 특징(음높이/세기)과 참조 음색을 조건으로 멜을 만드는 생성형(flow matching) | 코드와 Colab 노트북 작성, 소량 데이터로 흐름 확인. 본 학습 전 |
 
 오프라인(파일 입력, 파일 출력)으로 먼저 검증하고, 실시간화와 경량화는 나중에 생각한다.
 
@@ -23,6 +23,39 @@
 ## 현재 결과 (1단계, 합성 이펙트, 중간 체크포인트 기준)
 
 Guitar-TECHS DI 46개 파일로 만든 쌍(train 4338 / val 360 / test 906)을 T4에서 약 7천 스텝 학습한 중간 체크포인트를 전체 test 906쌍, 클립 전체 길이로 평가했다. 모델 평균 손실 0.283, dry를 그대로 내보내는 기준선(identity) 2.158. 손실이 큰 쌍은 컴프레서가 강하게 걸린 조합에 몰렸다. 주관 평가(소리 듣기)는 아직 안 했고, 합성 이펙트가 순한 편이라는 한계가 있다.
+
+## 생성형 모델 (4단계, `src/fxgen`)
+
+기타를 목소리나 다른 악기 소리로 바꾸는 쪽은 파형 변환이 아니라 **새로 만들어 내는** 방식으로 간다. 같은 음높이/세기에서 나올 수 있는 소리가 하나가 아니기 때문이다(발음, 숨소리, 비브라토의 세부). 평균을 내는 회귀 모델은 이런 곳에서 뭉개진 소리를 낸다.
+
+```
+연주 wav ──> 연주 특징 (음높이, 유성 여부, 주기성, 세기; 프레임당 4개)  ─┐
+참조 wav ──> 참조 인코더 ──> 음색 벡터 (192차원)                        ─┼─> flow matching 트랜스포머 ──> 멜 ──> BigVGAN v2 ──> wav
+                                                         노이즈         ─┘
+```
+
+- **학습에 쌍이 필요 없다.** 목표 음색의 녹음에서 연주 특징을 뽑고, 그 특징과 (같은 가수의 다른 파일에서 뽑은) 참조로 원래 멜을 복원하게 한다. 추론 때는 특징만 기타 연주에서 뽑아 넣는다.
+- **flow matching**: 노이즈와 진짜 멜을 직선으로 잇고, 신경망이 그 직선의 속도를 맞히게 한다. 샘플링은 노이즈에서 출발해 그 속도를 32스텝 적분한다.
+- **보코더는 학습하지 않는다.** 멜을 BigVGAN v2(`nvidia/bigvgan_v2_44khz_128band_512x`, MIT)의 것과 수치까지 같게 계산한다(44.1 kHz, n_fft 2048, hop 512, 멜 128).
+- 참조 음색은 가끔 지우고 학습해서 샘플링 때 guidance(`--cfg`)로 음색을 얼마나 강하게 따를지 조절한다.
+- 긴 입력은 약 4.5초씩 만들되 앞 구간의 끝 1.1초를 고정하고 이어서 생성한다.
+
+데이터는 VocalSet(가수 20명, 약 10시간, CC BY 4.0)과 Guitar-TECHS DI다. `female9`, `male11`은 학습에서 빼고 처음 듣는 음색 평가에 쓴다.
+
+```bash
+python scripts/download_data.py vocalset --dest data          # 2.1GB
+python scripts/gen_prepare.py --voice data/vocalset --guitar data/guitar_techs_di --out-dir gen_data
+python scripts/gen_train.py --data-dir gen_data --out-dir runs/gen1 --steps 100000
+python scripts/gen_infer.py --ckpt runs/gen1/best.pt --input riff.wav --ref singer.wav --output out.wav --transpose 12
+```
+
+Colab에서는 `notebooks/02_train_generative.ipynb`를 쓴다. `gen_infer.py`는 출력에서 다시 음높이를 추정해 입력 연주와의 차이(센트)를 같이 출력한다.
+
+### 지금까지 확인한 것과 못 한 것
+
+- 확인: VocalSet 36개 + 기타 4개 파일(약 10분)로 축소 모델(416만 파라미터)을 CPU에서 2458스텝 학습. val 손실 1.57 -> 0.36. 학습에 쓴 가수의 노래를 다른 가수 참조로 변환했을 때 음높이 차이 중앙값 약 60센트(Griffin-Lim으로 소리를 만든 값이고, 같은 조건에서 진짜 멜을 되돌린 기준선은 약 8센트). 흐름이 돈다는 확인일 뿐 품질 수치가 아니다.
+- 못 함: BigVGAN을 실제로 돌려 보는 것(노트북 4번 셀에서 멜 일치와 왕복 음질을 먼저 확인한다), 전체 데이터 학습, 사람이 듣는 평가.
+- 알려진 한계: 음높이 추정이 단선율용이라 코드 연주는 깨진다. 음높이/세기에 안 담기는 터치(뮤트, 피킹 위치)는 전달되지 않는다. 음색이 가수 18명 + 기타 연주자 몇 명뿐이라 처음 듣는 음색 참조는 약할 것이다. 가사가 없으니 목소리는 모음/허밍에 가깝게 나온다. 다른 악기로 넓히려면 그 악기의 단선율 데이터를 `gen_prepare.py`에 도메인으로 추가해야 한다.
 
 ## 데이터
 
@@ -97,8 +130,9 @@ configs/effects.yaml        이펙트 체인과 노브 범위 (44.1 kHz, reverb 
 configs/effects_mvp.yaml    MVP 학습용 설정 (48 kHz, reverb 제외)
 src/fxdata/                 랜덤 체인 샘플링, 렌더링, 메타 기록, 분할, 연주 특징/모음 합성 프로토타입(voice.py)
 src/fxmodel/                조건 벡터, FiLM TCN, 손실, 데이터셋, 학습, 추론
-scripts/                    download_data, render_dataset, train, evaluate, infer, voice_demo
-notebooks/                  Colab 원클릭 학습
+scripts/                    download_data, render_dataset, train, evaluate, infer, voice_demo, gen_prepare, gen_train, gen_infer
+src/fxgen/                  생성형: 멜, 연주 특징, flow matching 모델, 학습, 추론, 보코더 연결
+notebooks/                  Colab 원클릭 학습 (01: 노브 조건 이펙터, 02: 생성형)
 tests/                      합성 신호로 하는 검증
 ```
 
@@ -108,6 +142,9 @@ tests/                      합성 신호로 하는 검증
 - [x] 학습 코드 (TCN + FiLM 조건, 멀티 해상도 STFT 손실), Colab 원클릭 노트북
 - [x] GPU 학습으로 파이프라인 확인, 전체 test 평가 스크립트
 - [x] 연주 특징 추출과 합성 정답 프로토타입
+- [x] 생성형 모델 코드(flow matching + BigVGAN)와 Colab 노트북
+- [ ] 생성형 본 학습(VocalSet + Guitar-TECHS), BigVGAN 왕복 확인, 듣기 평가
+- [ ] 생성형에 다른 악기 데이터 추가, 어택/주법 특징
 - [ ] 센 디스토션/퍼즈 체인, 오버샘플링(에일리어싱 방지)
 - [ ] 입력 레벨/잡음/픽업 EQ 증강, 속주 변환(클립 가속, 겹치기)
 - [ ] 악기 설정 일반화(음높이 범위, 이펙트 체인, 샘플레이트를 설정으로), 베이스용 설정
